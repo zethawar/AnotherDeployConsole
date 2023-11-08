@@ -1,0 +1,1032 @@
+#!/bin/bash
+#=================================================================
+#                    Another Deploy Console
+#       Created by Emmanuel Guerrero zethawar@yandex.com
+#       Thanks to all the people i have known in my life
+#        because they have been my teachers in this life
+#           specially thanks to them who have hurt me
+#       because the snakes are the teachers of the ways.
+#         Thanks to my wife because she has teached me
+#           and thanks to AYAHUASCA Sacred Medicine
+#              that has showed me the way to GOD
+#                     ¡Eskawata Kayawei!
+#=================================================================
+# Necessary Variables
+sz(){
+len=`tput cols` # Screen width
+}
+now(){			# Produces datetime string
+date +%Y%m%d-%H%M%S
+}
+cls(){			# Clears the screen
+#printf "\033c"
+clear
+sz
+}
+sep(){			# Alternative function to display separator line
+sz
+for (( i=1; i<=len; i++ ))
+do 
+	printf "="
+done
+echo
+}
+progress(){		# Requires $1 with string to display c $2 with count and $3 with totals - Display a progress bar
+adv_str=$1
+adv_count=$2
+adv_totals=$3
+adv_str_len=`printf "$adv_str" | wc -m`
+adv_perc=`echo "scale=2; 100 * $adv_count / $adv_totals" | bc`
+adv_perc_len=`printf "$adv_perc" | wc -m`
+bar_len=$((len - adv_str_len - adv_perc_len - 5 ))  # 5 is used for spaces 
+bar_adv=`echo "$bar_len * $adv_perc / 100" | bc`
+bar_res=$((bar_len - bar_adv))
+bar_a=`for (( i=1; i<=bar_adv; i++)) ; do printf "█" ; done`
+bar_b=`for (( i=1; i<=bar_res; i++)) ; do printf " " ; done`
+cls
+echo -ne "$cY$adv_str $cG$bar_a$bar_b $cD$adv_perc % "
+}
+header(){		# Main header evaluates if ARS user is set up and requires a string $1 to display c
+offset(){
+if [ $hstring_len -gt 24 ]
+then
+	off=$hstring_len
+else
+	if [ -z $user ]
+	then off=38
+	else off=24
+	fi
+fi
+for (( i=1; i<=(len / 2 - ( logo_len + off ) / 2) ; i++)) ; do printf " " ; done
+}
+hstring=$1
+logo_len=8
+hstring_len=`printf "$hstring" | wc -m`
+cls
+sep
+count r
+while read -r line
+do
+	count +
+	offset
+	echo -ne "$fB$cG$line$cD" | sed 's/-/ /g'
+	case $count in
+	1) echo ;;
+	2) echo -e $cG$fB$fU"Another Deploy Console"$cD ;;
+	3) echo -e $fB$cY"$hstring"$cD ;;
+	4) echo ;;
+	esac
+done <<\EOF
+---#.--
+--#@@.-
+-#@..@.
+#@.--.@.
+EOF
+sep
+}
+display(){		# Makes decorated texts, requires $2 string to display  and $3 a char for decoration if $4 this is the color string
+string=$2
+if [ -z $3 ] 2>/dev/null
+then
+	char=" "
+else
+	char=$3
+fi
+if [ -z $4 ] 2>/dev/null
+then
+	col=$cR
+else
+	col=$4
+fi
+string_size=$(echo -n "$string" | wc -m)
+case $1 in
+c)
+	count r
+	for (( i=1; i<=(len / 2 - string_size / 2 - 5) ; i++)) ; do echo -n "$char" ; count + ; done
+	for (( i=1; i<=5 ; i++)) ; do echo -n " " ; done
+	echo -ne "$col$string$cD"
+	for (( i=1; i<=5 ; i++)) ; do echo -n " " ; done
+	for (( i=1; i<=(len - count - 10 - string_size) ; i++)) ; do echo -n "$char" ; done
+	;;
+l)
+	count r
+	for (( i=1; i<=3; i++ )) ; do echo -n "$char" ; count + ; done
+	echo -ne "$col  $string  $cD"
+	for (( i=1; i<=(len - count - 4 - string_size) ; i++)) ; do echo -n "$char" ; done
+	;;
+esac
+echo
+}
+startscreen(){
+mainlogo='ICAgICAgICAgICAgLiMtICAgICAgICAgICAgLUAlJSMrLS4gICAgICAgICAgICA6KyojJUBACiAgICAgICAgICAgICNAQC0gICAgICAgICAgIC1AQEBAQEBAKjogICAgICAgLislQEBAQEBAQAogICAgICAgICAgICNAQEBALSAgICAgICAgICAtQEBAQEBAQEBAKiAgICAgPUBAQEBAQEBAQEAKICAgICAgICAgICpAQEBAQEAtICAgICAgICAgICA6K0BAQEBAQEAjICAgK0BAQEBAQEAqLS4gCiAgICAgICAgICpAQEBAQEBAQDogICAgICAgICAgICAuI0BAQEBAQCsgLUBAQEBAQCU6ICAgIAogICAgICAgICpAQEBAQEBAQEBAOiAgICAgICAgICAgIC5AQEBAQEBALiNAQEBAQEA6ICAgICAKICAgICAgICpAQEBAQEBAQEBAQCU6ICAgICAgICAgICAgKkBAQEBAQDpAQEBAQEAlICAgICAgCiAgICAgICtAQEBAQEBAQEBAQEBAJTogICAgICAgICAgICpAQEBAQEA6QEBAQEBAJSAgICAgIAogICAgICtAQEBAQEBAPSVAQEBAQEAlLiAgICAgICAgICAlQEBAQEBALiVAQEBAQEAuICAgICAKICAgICtAQEBAQEBAPSAuJUBAQEBAQCUuICAgICAgICArQEBAQEBAIyArQEBAQEBAIyAgICAgCiAgID1AQEBAQEBAKyAgIC4lQEBAQEBAJS4gICAgIDojQEBAQEBAJS4gICNAQEBAQEAjLSAgIAogID1AQEBAQEBAKyAgICAgLiVAQEBAQEAlLiA6IyVAQEBAQEBAJTogICAuI0BAQEBAQEBAIyoKIC1AQEBAQEBAKyAgICAgICAuJUBAQEBAQCMuLUBAQEBAQEAlPSAgICAgICAtJUBAQEBAQEBACi1AQEBAQEBAKiAgICAgICAgIDolQEBAQEBAIz1AQEBAJSotICAgICAgICAgICA6KyNAQEBAQAolQEBAQEBAJS4gICAgICAgICAgK0BAQEBAQEAjQCM9LiAgICAgICAgICAgICAgICAgLj0jQEAK'
+cls
+sep
+base64 -d <<< "$mainlogo" | sed 's| |_|g' | while read -r line
+do 
+	display c "$line" "" $cG | sed 's|_| |g'
+	sleep 0.02
+done
+sep
+display c "Another Deployment Console" "*" $cR
+display c "2023 Emmanuel Guerrero zethawar@yandex.com" "" $cY
+sep
+sleep 2
+}
+# Other Functions
+count(){		# A counter, requires + to add 1, - to rest 1 or r to reset to zero
+case $1 in
++) count=$(( count + 1 )) ;;
+-) count=$(( count - 1 )) ;;
+r) count=0 ;;
+esac
+}
+viewfile(){
+vfile=$1
+header "Visualizando archivo $vfile"
+cat $vfile
+sep
+display c "Líneas: `cat $vfile|wc -l`"
+display c "Use la barra de desplazamiento para desplazar el archivo"
+sep
+cat <<EOF
+ [m] Enviar este archivo por mail
+ [q] Salir
+EOF
+sep
+read -n1 -ep "Introduzca una opción:" key
+echo
+case $key in
+	m) cat <<EOF | mail -a $vfile -r $wm_user@wal-mart.com -s "Walmart Support Console File" $wm_user@wal-mart.com
+Archivo $vfile ha sido enviado desde Walmart Support Console
+
+Host: $(hostname)
+User: $wm_user
+
+`date +%Y` Walmart Support Console
+EOF
+	case $? in
+		0) echo -e $cG"?"$cD" Envío correcto" ; sleep 1 ;;
+		*) echo -e $cR"?"$cD" Error de envío" ; sleep 1 ;;
+	esac
+	;;
+	*)
+	;;
+esac
+}
+sortfiles(){
+for f in $@
+do
+cp $f $f.bak
+sort $f.bak > $f
+rm $f.bak
+done
+}
+job_limiter(){	# Needs numeric input $1 
+sp="/-\|"
+while [ $(jobs -p|wc -l) -ge $1 ]
+do 
+	printf "\b${sp:i++%${#sp}:1}"
+	#sleep 0.01
+done
+}
+breaker(){
+string=$1
+display c "$string" "*" $cY
+display c "Presione cualquier tecla para salir"
+read -n1
+break
+}
+waiter(){
+if [ -z ${1+x} ] 2>/dev/null
+then
+	time=5
+else
+	time=$1
+fi
+total_pids=${#pid[@]}
+while [ ${#pid[@]} -gt 0 ]
+do
+	cls
+	progress "Finalizando ${#pid[@]} tareas. Máximo $time minutos" ${#pid[@]} $total_pids
+	for ps in ${!pid[@]}
+	do
+		command=${pid[$ps]}
+		case `ps --no-headers -o command $ps` in
+		"$command")
+			pstime=`ps --no-headers -o etime $ps | tr -d ' ' | cut -d ':' -f1|bc`
+			if [ $pstime -ge $time ]
+			then
+				kill -9 $ps
+			fi
+			;;
+		*)
+			unset pid[$ps]
+			;;
+		esac
+	done
+	sleep 1
+done
+}
+# Testing Functions
+testping(){		# Needs $1 ip or hostname as input - produces exit codes
+#fping -t 5000 -q -a $1 >/dev/null 2>&1 
+ping $1 -w 5 >/dev/null 2>&1
+}
+testport(){		# Needs $1 ip or hostname as input - produces $port_test
+port_test=`netcat -zv $1 22 2>&1`
+}
+testcon(){		# Needs $1 host as input - produces $con_test
+#con_test=`timeout -s KILL 30s echo "exit 0" | ssh -i /root/.ssh/id_rsa -o UserKnownHostsFile=/dev/null -o PasswordAuthentication=no -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=error -o ConnectTimeout=30 -l root -T $1 2>&1`
+#con_test=`timeout -s KILL 30s echo "exit 0" | ssh -o PasswordAuthentication=no -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=error -o ConnectTimeout=30 -T $1 2>&1`
+con_test=`timeout -s KILL 30s echo "exit 0" | sshquery $1 2>&1`
+}
+# Connection options
+sshquery(){ 	# Needs $1 as hostname, if $2, this is the argument command
+if [ -z ${2+x} ] 2>/dev/null
+then
+	ssh -i /root/.ssh/id_rsa -o UserKnownHostsFile=/dev/null -o PasswordAuthentication=no -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=error -o ConnectTimeout=30 -l root -T $1
+else
+	ssh -i /root/.ssh/id_rsa -o UserKnownHostsFile=/dev/null -o PasswordAuthentication=no -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=error -o ConnectTimeout=30 -l root -T $1 $2
+fi
+}
+sshput(){		# sshput host source_file destfile ## Copies over ssh
+cat $2 | sshquery $1 "cat - > $3 ; exit \$?"
+}
+sshget(){		# sshget host source_file destfile ## Gets files over ssh
+sshquery $1 "dd if=\"$2\" 2>/dev/null ; exit 0 >/dev/null 2>&1" > $3 2>/dev/null 
+}
+# Deploy Functions
+target_selective(){
+header "Listado de Determinantes"
+display c "Introduzca el listado de determinantes o hosts y presione doble enter para finalizar"
+target=$tmp/target
+> $target
+while read -r line 
+do
+	if [ $line ]
+	then 
+		if [[ $line =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]
+		then
+			echo "$line" >> $target 
+		elif [[ $line =~ ^[0-9]+$ ]]
+		then
+			w_count=`echo -n "$line" | wc -m`
+			if [ $w_count -eq 4 ]
+			then
+				echo "ars.s0$line.mx.wal-mart.com" >> $target
+			else
+				echo "ars.s0`printf "%04d" $line`.mx.wal-mart.com" >> $target
+			fi
+		elif [[ $line = "ars"* ]]
+		then
+			echo "$line" >> $target
+		else
+			echo "Destino $line inválido. Introduzca un destino válido"
+		fi
+	else
+		break
+	fi
+done
+}
+script_runner_bg(){
+testping $host
+if [ $? -ne 0 ]
+then
+	echo "$host|Ping Error" >> $errlog
+	return 1
+fi
+#echo "Ping $host OK"
+testport $host
+if [ $? -ne 0 ]
+then
+	case $port_test in
+	(*refused)
+		echo "$host|Puerto SSH Conexión Rechazada" >> $errlog
+		return 1
+		;;
+	(*closed)
+		echo "$host|Puerto SSH Cerrado" >> $errlog
+		return 1
+		;;
+	esac
+fi
+#echo "Puerto $host OK"
+testcon $host
+case $? in
+(0)
+	#echo "Conexion $host OK"
+	$bin/$scr | grep -v -i 'login\|Time synchronized with\|Time could not be synchronized' | while read -r line
+	do
+		echo "$host|$line" >> $logfile
+	done
+	;;
+(255)
+	echo "$host|SSH Error de llaves" >> $errlog
+	;;
+(*)
+	echo "$host|SSH Error de acceso" >> $errlog
+	;;
+esac
+}
+script_runner(){
+target=$tmp/target
+logdir=$log/$scr/`now`-$prefix
+mkdir -p $logdir
+logfile=$logdir/log
+errlog=$logdir/errores
+chmod 700 $bin/$scr
+> $logfile
+> $errlog
+totals=`cat $target | wc -l`
+count r
+pid=()
+for host in `cat $target`
+do
+	count +
+	export host
+	progress ">>> $scr" $count $totals
+	script_runner_bg &
+	id=$!
+	pid[$id]=`ps --no-headers -o command $id`
+	job_limiter $threads
+done
+waiter "$maxwait"
+sortfiles $logfile $errlog
+}
+script_creator(){
+header "Creador de Scripts"
+while true
+do
+	read -r -p "Ingrese el nombre del script: " newscript_name
+	newscript_name=`echo -n "$newscript_name" | sed 's/ /_/g'`
+	if [ -f $bin/$newscript_name ]
+	then
+		echo "Archivo ya existe"
+	else
+		touch $bin/$newscript_name
+		break
+	fi
+done
+script_example > $bin/$newscript_name
+vi $bin/$newscript_name
+}
+script_example(){
+cat <<\EOX
+#!/bin/bash
+# =================================
+# Automatizador de Scripts remotos
+# =================================
+cat <<\EOF | sshquery $host
+# Coloca aquí tu script
+EOF
+EOX
+}
+script_editor(){
+while true
+do
+	read -r -p "Ingrese el ID del Script a editar: " key
+	if [ ! -z ${script_list[$key]} ] # 
+	then
+		echo -ne "¿Desea borrar el contenido del script "$cR"${script_list[$key]}"$cD"?(s/n)"
+		read -r -n1 key2
+		case $key2 in
+		s)
+			script_example > $bin/${script_list[$key]}
+			vi $bin/${script_list[$key]}
+			break
+			;;
+		n)
+			vi $bin/${script_list[$key]}
+			break
+			;;
+		*)
+			echo "$t_bad"
+			;;
+		esac
+	else
+		echo "$t_bad"
+	fi
+done
+}
+script_delete(){
+while true
+do
+	read -r -p "Ingrese el ID del Script a borrar: " key
+	if [ ! -z ${script_list[$key]} ] # 
+	then
+		rm  $bin/${script_list[$key]}
+		break
+	else
+		echo "$t_bad"
+	fi
+done
+}
+script_lister(){ # Creates $script_list
+script_list=()
+for i in `ls $bin/` ; do script_list+=("$i") ; done
+
+for i in "${!script_list[@]}" ; do echo " [$i] ${script_list[$i]}" ; done
+}
+script_selector(){
+while true
+do
+	cls
+	header "Selector de Scripts"
+	echo -e $cY" [ID] Script"$cD
+	sep
+	script_lister
+	sep
+	echo " [n] Definir nuevo
+ [e] Editar
+ [d] Eliminar
+ [q] Salir"
+	sep
+	read -r -p "$t_sel" key
+	if [[ $key =~ ^[0-9]+$ ]] && [ ! -z ${script_list[$key]} ] # 
+	then
+		scr=${script_list[$key]}
+		parameter_config
+		script_runner
+	else
+		case $key in
+			n) script_creator ;;
+			e) script_editor ;;
+			d) script_delete ;;
+			q) break ;;
+			*) echo "$t_bad" ;;
+		esac
+	fi
+done
+}
+parameter_config(){
+header "Configuración de parámetros de lanzamiento"
+read -r -p "Ingrese una descripción para este lanzamiento: " prefix
+prefix=`echo -n "$prefix" | sed 's/ /_/g'`
+while true
+do
+	read -r -p "Cantidad de hilos paralelos [ 2 - $maxthreads ]: " threads
+	threads=`echo -n "$threads" | sed 's/[^0-9]//g'`
+	if [ ! -z $threads ]
+	then
+		if [ $threads -ge 2 ] && [ $threads -le $maxthreads ]
+		then
+			break
+		fi
+	fi
+done
+while true
+do
+	read -r -p "Tiempo de espera [ 1 - 60 ] minutos: " maxwait
+	maxwait=`echo -n "$maxwait" | sed 's/[^0-9]//g'`
+	if [ ! -z $maxwait ]
+	then
+		if [ $maxwait -ge 1 ] && [ $maxwait -le 60 ]
+		then
+			break
+		fi
+	fi
+done
+}
+# Scan Functions
+scan_menu(){
+while true
+do
+	header "Escaneo de archivos"
+	cat <<\EOF
+ [1] Escanear un solo archivo
+ [2] Escanear múltiples archivos
+ 
+ [q] Salir
+EOF
+	sep
+	read -n1 -p "$t_sel" key
+	case $key in
+	1) scan_selector ;;
+	2) scan_target ;;
+	q) break ;;
+	*) echo "$t_bad" ;;
+	esac
+done
+}
+scan_creator(){
+while true
+do
+	read -p "Archivo a escanear: " key
+	if [ `echo -n "$key" | wc -m` -gt 1 ]
+	then
+		echo "$key" >> $tmp/scan_files
+		break
+	else
+		echo "$t_bad"
+	fi
+done
+}
+scan_delete(){
+while true
+do
+	read -p "Número de archivo a eliminar: " key
+	if [[ $key =~ ^[0-9]+$ ]] && [ ! -z ${scan_list[$key]} ]
+	then
+		line=$(( key + 1 ))
+		sed -i "$line"d scan/files.list
+		break
+	else
+		echo "$t_bad"
+	fi
+done
+}
+scan_lister(){
+scan_list=()
+touch $tmp/scan_files
+while read -r i
+do
+scan_list+=("$i")
+done < <( sort $tmp/scan_files)
+for i in "${!scan_list[@]}" ; do echo " [$i] ${scan_list[$i]}" ; done
+}
+scan_run(){
+scr="`echo $file | sed 's/\//_/g' | sed 's|^_||g'`"
+cat <<EOX > $bin/$scr
+cat <<\EOF | sshquery \$host
+get_data(){
+case \`hostname\` in
+("REG"*)
+	dfile=/home/reg/gd90/7052_env.bat
+	ffile=/home/reg/gd90/P_REGCONF.hierarchy.7200.DispersionQR.XML
+	;;
+("ars"*)
+	dfile=/home/server/sh/STO_ENV.BAT
+	ffile=/home/server/M_DEPLOY/pos/gd90/P_REGCONF.hierarchy.7200.DispersionQR.XML
+	;;
+esac
+if [ -f \$dfile ]
+then
+	det=\`grep STO \$dfile | cut -d= -f2 | sed 's/[^0-9]//g'\`
+else
+	det="Error"
+fi
+if [ ! -f \$ffile ]
+then
+	fsubsid="Error"
+	business="Error"
+	return 1
+fi
+subsid=\`grep '<SubsId>' \$ffile | cut -d '>' -f2 | cut -d '<' -f1\`
+case \$subsid in
+	(1) fsubsid="Walmart Supercenter" ;;
+	(2) fsubsid="Sam’s club" ;;
+	(3) fsubsid="Walmart Express" ;;
+	(4) fsubsid="Bodega" ;;
+	(5) fsubsid="Mi Bodega Aurrera" ;;
+	(6) fsubsid="Bodega Aurrera Expres" ;;
+	(*) return 1 ;;
+esac
+case \$subsid in
+	(2) business="SAMS" ;;
+	(*) business="AUTOSERVICIOS" ;;
+esac
+}
+if [ -f $file ]
+then
+	get_data
+	md5=\$(md5sum $file | awk '{ print \$1}')
+	stat=\$(stat -c %a'|'%A'|'%u'|'%g'|'%y'|'%z $file)
+	echo "\$business|\$fsubsid|\$det|\$md5|\$stat"
+else
+	echo "No encontrado"
+fi
+EOF
+EOX
+parameter_config
+script_runner
+scan_filter
+rm $bin/$scr
+}
+scan_selector(){
+while true
+do
+	cls
+	header "Escaneo Individual de archivos"
+	echo -e $cY" [ID] Archivo"$cD
+	sep
+	scan_lister
+	sep
+	echo " [n] Nuevo archivo
+ [d] Eliminar
+ [q] Salir"
+	sep
+	read -r -p "$t_sel" key
+	if [[ $key =~ ^[0-9]+$ ]] && [ ! -z ${scan_list[$key]} ] # 
+	then
+		file=${scan_list[$key]}
+		scan_run
+	else
+		case $key in
+			n) scan_creator	;;
+			d) scan_delete ;;
+			q) break ;;
+			*) echo "$t_bad" ;;
+		esac
+	fi
+done
+}
+scan_getfile(){
+while true
+do	
+	#scp -i /root/.ssh/id_rsa -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@$host:$file $logdir/versiones/$md5
+	sshget $host $file $logdir/versiones/$md5
+	if [ $? -eq 0 ]
+	then
+		if [[ `md5sum $logdir/versiones/$md5 | awk '{ print $1 }'` == "$md5" ]]
+		then break
+		fi
+	fi
+done
+}
+scan_filter(){
+mkdir -p $logdir/analisis $logdir/versiones
+display c "Analizando datos obtenidos" - $cG
+cat $logfile | cut -d '|' -f2,5 | sort | uniq -c > $logdir/analisis/version_negocio
+cat $logfile | cut -d '|' -f3,5 | sort | uniq -c > $logdir/analisis/version_formato
+cat $logfile | awk -F '|' '{ print $5 }' | sort | uniq -c > $logdir/analisis/versiones
+cat $logfile | awk -F '|' '{ print $6,$7,$8,$9 }' | sort | uniq -c > $logdir/analisis/permisos
+cat $logfile | awk -F '|' '{ print $10,$11 }' | awk '{print $1,$4}' | sort | uniq -c > $logdir/analisis/fechas
+cat $logfile | awk -F '|' '{ print $5,$10 }' | awk '{print $1,$2}' | sort | uniq -c | sort -k 3> $logdir/analisis/version_fecha
+display c "Descargando distintas versiones de archivo" - $cG
+for md5 in `grep -v No $logfile | cut -d'|' -f5 | sort | uniq `
+do
+	host=`grep $md5 $logfile | cut -d'|' -f1 | sort -R |head -n 1`
+	echo -e $cG"Descargando $file versión $md5 desde $host:"$cD
+	scan_getfile & 2>/dev/null
+	id=$!
+	pid[$id]=`ps --no-headers -o command $id`
+	job_limiter 60
+done
+waiter 10
+echo -e $cG"Analizando líneas de archivo"$cD
+while IFS='|' read -r host business format det md5 unused
+do
+	while read -r line
+	do
+		echo "$host|$md5|$line"
+	done < $logdir/versiones/$md5
+done < $logfile > $logdir/analisis/analisis_de_lineas
+}
+scan_target(){
+header "Escaneo de múltiples archivos"
+display c "Introduzca el listado de archivos a escanear y presione doble enter para continuar"
+target=$tmp/scan_target
+> $target
+while read -r line 
+do
+	if [ $line ]
+	then 
+		echo "$line" >> $target 
+	else
+		break
+	fi
+done
+for file in ` cat $target`
+do
+	scan_run
+done
+}
+#TARS
+tar_menu(){
+while true
+do
+	header "Creador de Tars"
+	cat <<\EOF
+ [1] Crear Tars de home
+ 
+ [q] Salir
+EOF
+sep
+read -n1 -p "$t_sel" key
+	case $key in
+	1) tar_home_processor ;;
+	q) exit ;;
+	*) echo $t_bad ;;
+	esac
+done
+}
+tar_home_create(){
+echo "Creando tars desde $ip" | tee -a $logfile
+cat $sbin/tar_de_home | sshquery $ip >> $logfile
+if [ $? -ne 0 ]
+then 
+	echo -e $cR"Error al crear el tar ${format}:${model}:${ip}"$cD
+	return 1
+else
+	md5_source=`sshquery $ip "md5sum /tmp/backup-limpio.tar.gz" | grep -v -i 'login\|Time synchronized with\|Time could not be synchronized' | awk '{print $1}'`
+	dest_dir=${dest_dir}/${version}
+	dest_file=${dest_dir}/home/home_${version}_${format}_${model}_pre.tar.gz
+	md5_dest=""
+	while [[ "$md5_source" != "$md5_dest" ]]
+	do
+		sshquery $ip "dd if=/tmp/backup-limpio.tar.gz" | sshquery $dest_host "mkdir -p ${dest_dir} ; dd of=${dest_file}"
+		md5_dest=`echo "md5sum ${dest_file} " | sshquery $dest_host | grep -v -i 'login\|Time synchronized with\|Time could not be synchronized' | awk '{print $1}'`
+		echo "Comparando MD5 de TAR ${format} ${model}|$md5_source|$md5_dest"
+	done
+	echo "MD5 correcto $md5_dest"
+	created_tars+=("$ip")
+	return 0
+fi
+}
+tar_home_copy_dirty(){
+md5_source=`echo "md5sum /tmp/backup-sucio.tar.gz" | sshquery $ip | grep -v -i 'login\|Time synchronized with\|Time could not be synchronized' | awk '{print $1}'`
+dest_dir=${dest_dir}/${version}
+dest_file=${dest_dir}/home_${version}_${format}_${model}.tar.gz
+while true
+do
+	sshquery $ip "cat /tmp/backup-limpio.tar.gz" | sshquery $dest_host "dd of=${dest_file}"
+	md5_dest=`echo "md5sum ${dest_file} " | sshquery $dest_host | grep -v -i 'login\|Time synchronized with\|Time could not be synchronized' | awk '{print $1}'`
+	if [[ "$md5_source" = "$md5_dest" ]]
+	then
+		return 0
+	fi
+done
+}
+tar_home_processor(){
+array_format_name=("Bodega Aurrera Express" "Bodega Aurrera" "Mi Bodega" "SAMS" "Superama" "Supercenter" "Walmart Express")
+array_format=("bae" "ba" "mb" "sa" "sp" "sc" "we")
+array_model=("NCR" "IBM")
+unset selection
+selection=()
+unset created_tars
+created_tars=()
+header "Tars de Home"
+echo $cG
+display c "Introduzca la versión (WX)" "*" $cG
+read version
+sep
+display c "Destino [29.111.67.6]" "*" $cG
+read dest_host
+dest_host=${dest_host:-29.111.67.6}
+sep
+display c "Ruta en el servidor $dest_dir donde se crearan los TARS" "*" $cG
+read dest_dir
+sep
+display c "Introduzca una IP de Caja o deje en blanco si no tiene candidato" "*" $cG
+for i in "${!array_format[@]}"
+do
+	for model in "${array_model[@]}"
+	do
+		echo -ne "$cG ${array_format_name[$i]} $cR $model $cD :"
+		read ip 
+		if [ ! -z ${ip} ]
+		then
+			selection+=("${array_format[$i]}|$model|$ip")
+		fi
+	done
+done
+sep
+count r
+for line in "${selection[@]}"
+do
+	count +
+	progress "Creando TARs de Home" "$count" "${#selection[@]}"
+	format=`echo -n $line | awk -F '|' '{print $1}'`
+	model=`echo -n $line | awk -F '|' '{print $2}'| tr '[:upper:]' '[:lower:]'`
+	ip=`echo -n $line | awk -F '|' '{print $3}'`
+	logfile=$log/TAR-home_${version}_${format}_${model}.log
+	> $logfile
+	tar_home_create & >> $logfile
+	id=$!
+	pid[$id]=`ps --no-headers -o command $id`
+	job_limiter 4
+done
+waiter 6000 "Creando y transfiriendo ${#selection[@]} TARs de Home"
+display c "Transfiriendo Tars Sucios. Tome asiento y vuelva más tarde"
+for ip in "${created_tars[@]}"
+do
+	logfile=$log/TAR-home_${version}_${format}_${model}.log
+	tar_home_copy_dirty & 2>> $logfile
+	id=$!
+	pid[$id]=`ps --no-headers -o command $id`
+done
+waiter 6000 "Creando y transfiriendo ${#created_tars[@]} TARs sucios. Tome asiento"
+}
+# SSH Keys Repair
+p_reader(){
+display c "Introduzca las contraseñas posibles para estas cajas y presione doble ENTER para continuar"
+while read -r line 
+do
+	if [ $line ]
+	then 
+		pwds+=("$line")
+	else
+		break
+	fi
+done
+}
+p_sshquery(){
+if [ -z ${2+x} ] 2>/dev/null
+then
+	sshpass -p "$pwd" ssh -o PasswordAuthentication=yes -o StrictHostKeyChecking=no -o LogLevel=error -o ConnectTimeout=30 -T $host
+else
+	sshpass -p "$pwd" ssh -o PasswordAuthentication=yes -o StrictHostKeyChecking=no -o LogLevel=error -o ConnectTimeout=30 -T $host "$2"
+fi
+}
+k_update(){
+case `p_sshquery $host "hostname"` in
+REG) key_new=$key_cajas ;;
+*)   key_new=$key_ars   ;;
+esac
+#p_sshquery $host "mkdir -p /root/.ssh/"
+#sshpass -p "$pwd" scp -o PasswordAuthentication=yes -o StrictHostKeyChecking=no -o LogLevel=error -o ConnectTimeout=30 $key_new $host:$3 2>/dev/null
+#cat $key_new | p_sshquery $host "mkdir -p /root/.ssh/ ; cat - > /root/.ssh/authorized_keys ; exit \$?"
+cat <<EOF | p_sshquery $host
+mkdir -p /root/.ssh/
+cat <<\EOX > /root/.ssh/authorized_keys
+`cat $new_key`
+EOX
+return \$?
+EOF
+if [ $? -eq 0 ]
+then
+	echo "$host|Transferencia de llave correcta"
+	return 0
+else
+	echo "$host|Error al transferir la llave"
+	return 1
+fi
+}
+k_permissions(){
+cat <<\EOF | p_sshquery $host
+chown -R root:root /root >/dev/null 2>&1
+chmod 0600 /root/.ssh/authorized_keys
+EOF
+permissions=`p_sshquery $host "stat /root/.ssh/authorized_keys -c %a'|'%u'|'%g"`
+if [[ "$permissions" == "600|0|0" ]]
+then
+	echo "$host|$permissions|Permisos correctos"
+	return 0
+else
+	echo "$host|$permissions|Permisos incorrectos"
+	return 1
+fi
+}
+p_tester(){
+count2=0
+for pwd in "${pwds[@]}"
+do
+	count2=$(( count2 + 1 ))
+	p_sshquery $host "exit 0" > /dev/null 2>&1
+	if [ $? -eq 0 ]
+	then
+		echo "$host|Contraseña correcta"
+		return 0
+	else
+		if [ $count2 -eq ${#pwds[@]} ]
+		then
+			echo "$host|Sin contraseña"
+			return 1
+		fi
+	fi
+done
+}
+access_repairer_process(){
+maxtries=3
+tries=0
+while true
+do
+	tries=$(( tries + 1 ))
+	if [ $tries -eq $maxtries ]
+	then 
+		echo "$host|Sin reparación posible"
+		break
+	fi
+	p_tester
+	if [ $? -ne 0 ] ; then break ; fi
+	k_update
+	if [ $? -ne 0 ] ; then break ; fi
+	k_permissions
+	if [ $? -ne 0 ] ; then break ; fi
+	testcon $host
+	if [ $? -eq 0 ]
+	then
+		echo "$host|Reparación correcta"
+		break
+	fi
+done
+}
+access_repair_bg(){
+testping $host
+if [ $? -ne 0 ]
+then
+	echo "$host|Ping Error"
+	return 1
+fi
+testport $host
+if [ $? -ne 0 ]
+then
+	case $port_test in
+	*refused)
+		echo "$host|Puerto SSH Conexión Rechazada"
+		return 1
+		;;
+	*closed)
+		echo "$host|Puerto SSH Cerrado"
+		return 1
+		;;
+	esac
+fi
+ssh-keygen -R $host > /dev/null 2>&1
+testcon $host
+case $? in
+0)
+	echo "$host|No necesita reparación"
+	;;
+*)
+	access_repairer_process
+	;;
+esac
+}
+access_repair(){
+header "Reparador de Acceso SSH"
+unset pwds
+declare pwds=()
+p_reader
+echo "Ingresados ${#pwds[@]} passwords"
+key_ars=keys/authorized_keys-ars
+key_cajas=keys/authorized_keys-cajas
+target=$tmp/target
+logdir=$log/AccessRepair/`now`
+mkdir -p $logdir
+logfile=$logdir/log
+> $logfile
+totals=`cat $target | wc -l`
+count r
+pid=()
+for host in `cat $target`
+do
+	count +
+	progress ">>> Reparando Acceso" $count $totals
+	access_repair_bg >> $logfile &
+	id=$!
+	pid[$id]=`ps --no-headers -o command $id`
+	job_limiter 60
+done
+waiter 5
+sortfiles $logfile $errlog
+}
+# Variables and necessary data
+export TMOUT=0
+export -f sshquery
+# Format Characters
+cD="\033[0m"	# Character for default color
+fB="\033[1m"	# Character for Bold
+fU="\033[4m"	# Character for Underlined
+fR="\033[7m"	# Character for realzed text
+cR="\033[91m"	# Character for red color
+cG="\033[92m"	# Character for green color
+cY="\033[93m"	# Character for yellow color
+cB="\033[94m"	# Character for blue color
+# Operating folders and files
+mkdir -p log bin sbin tmp
+dir=`pwd`
+log=$dir/log
+bin=$dir/bin
+sbin=$dir/sbin
+tmp=$dir/tmp
+maxthreads=350
+# Basic text functions and vars
+t_sel="Introduzca una opción: "
+t_bad="Opción inválida"
+# Main Menu
+startscreen
+while true
+do
+	header "2023 Emmanuel Guerrero - zethawar@yandex.com"
+	if [ -f $tmp/target ]
+	then
+		target_count=`cat $tmp/target | wc -l`
+		if [ $target_count -ge 1 ]
+		then
+			echo -e $cG" [d] Redefinir $target_count destinos" $cD
+		else
+			echo -e $cR" [d] Definir destinos" $cD
+		fi
+	else
+		echo -e $cR" [d] Definir destinos" $cD
+	fi
+	cat <<EOF
+	
+ [s] Scripts
+ [f] Escaneo de archivos
+ [r] Reparar acceso SSH
+ 
+ [q] Salir
+EOF
+sep
+	read -n1 -p "$t_sel" key
+	case $key in
+	d) target_selective ;;
+	s) script_selector ;;
+	f) scan_menu ;;
+	r) access_repair ;;
+	q) exit ;;
+	*) echo $t_bad ;;
+	esac
+done
