@@ -211,18 +211,18 @@ do
 	for ps in ${!pid[@]}
 	do
 		command=${pid[$ps]}
-		case `ps --no-headers -o command $ps` in
-		"$command")
-			pstime=`ps --no-headers -o etime $ps | tr -d ' ' | cut -d ':' -f1|bc`
+		pscommand=`ps --no-headers -o command $ps`
+		if [ $? -eq 0 ] && [[ "$pscommand" == "$command" ]]
+		then
+			pstime=`ps --no-headers -o etime $ps | tr -d ' ' | cut -d ':' -f1 | bc`
+			echo "--->|ps:$ps|ps_time:$pstime|max_time:$time|<---"
 			if [ $pstime -ge $time ]
 			then
 				kill -9 $ps
 			fi
-			;;
-		*)
+		else
 			unset pid[$ps]
-			;;
-		esac
+		fi
 	done
 	sleep 1
 done
@@ -424,7 +424,6 @@ done
 script_lister(){ # Creates $script_list
 script_list=()
 for i in `ls $bin/` ; do script_list+=("$i") ; done
-
 for i in "${!script_list[@]}" ; do echo " [$i] ${script_list[$i]}" ; done
 }
 script_selector(){
@@ -663,7 +662,7 @@ do
 	job_limiter 60
 done
 waiter 10
-echo -e $cG"Analizando líneas de archivo"$cD
+echo -e $cG"Analizando líneas de archivo $logfile"$cD
 while IFS='|' read -r host business format det md5 unused
 do
 	while read -r line
@@ -971,6 +970,13 @@ done
 waiter 5
 sortfiles $logfile $errlog
 }
+# User selection
+user_list(){
+user_list=()
+for i in `ls $bin/` ; do user_list+=("$i") ; done
+for i in "${!user_list[@]}" ; do echo " [$i] ${user_list[$i]}" ; done
+}
+# user_select(){}
 # Variables and necessary data
 export TMOUT=0
 export -f sshquery
