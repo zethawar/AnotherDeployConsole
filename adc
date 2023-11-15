@@ -210,19 +210,33 @@ do
 	progress "Finalizando ${#pid[@]} tareas. Máximo $time minutos" ${#pid[@]} $total_pids
 	for ps in ${!pid[@]}
 	do
-		command=${pid[$ps]}
-		pscommand=`ps --no-headers -o command $ps`
-		if [ $? -eq 0 ] && [[ "$pscommand" == "$command" ]]
-		then
+		while true
+		do
+			command=${pid[$ps]}
+			pscommand=`ps --no-headers -o command $ps`
+			if [ $? -ne 0 ]
+			then
+				unset pid[$ps]
+				break
+			fi
+			if [[ "$pscommand" != "$command" ]]
+			then
+				unset pid[$ps]
+				break
+			fi
 			pstime=`ps --no-headers -o etime $ps | tr -d ' ' | cut -d ':' -f1 | bc`
+			if [ $? -ne 0 ]
+			then
+				unset pid[$ps]
+				break
+			fi
 			echo "--->|ps:$ps|ps_time:$pstime|max_time:$time|<---"
 			if [ $pstime -ge $time ]
 			then
 				kill -9 $ps
 			fi
-		else
-			unset pid[$ps]
-		fi
+			break
+		done
 	done
 	sleep 1
 done
@@ -645,12 +659,13 @@ done
 scan_filter(){
 mkdir -p $logdir/analisis $logdir/versiones
 display c "Analizando datos obtenidos" - $cG
-cat $logfile | cut -d '|' -f2,5 | sort | uniq -c > $logdir/analisis/version_negocio
-cat $logfile | cut -d '|' -f3,5 | sort | uniq -c > $logdir/analisis/version_formato
+cat $logfile | cut -d '|' -f2,5 | sort | uniq -c > $logdir/analisis/version-negocio
+cat $logfile | cut -d '|' -f3,5 | sort | uniq -c > $logdir/analisis/version-formato
 cat $logfile | awk -F '|' '{ print $5 }' | sort | uniq -c > $logdir/analisis/versiones
 cat $logfile | awk -F '|' '{ print $6,$7,$8,$9 }' | sort | uniq -c > $logdir/analisis/permisos
 cat $logfile | awk -F '|' '{ print $10,$11 }' | awk '{print $1,$4}' | sort | uniq -c > $logdir/analisis/fechas
-cat $logfile | awk -F '|' '{ print $5,$10 }' | awk '{print $1,$2}' | sort | uniq -c | sort -k 3> $logdir/analisis/version_fecha
+cat $logfile | while IFS='|' read -r ars business format store md5 perma permb uid gid mtime ctime ; do time=`cut -d ' ' -f1 <<< "$mtime"` ; echo "$time $md5" ; done | sort | uniq -c > $logdir/analisis/fecha_modificacion-version
+cat $logfile | while IFS='|' read -r ars business format store md5 perma permb uid gid mtime ctime ; do time=`cut -d ' ' -f1 <<< "$ctime"` ; echo "$time $md5" ; done | sort | uniq -c > $logdir/analisis/fecha_cambio-version
 display c "Descargando distintas versiones de archivo" - $cG
 for md5 in `grep -v No $logfile | cut -d'|' -f5 | sort | uniq `
 do
@@ -665,10 +680,13 @@ waiter 10
 echo -e $cG"Analizando líneas de archivo $logfile"$cD
 while IFS='|' read -r host business format det md5 unused
 do
-	while read -r line
-	do
-		echo "$host|$md5|$line"
-	done < $logdir/versiones/$md5
+	if [ -f $logdir/versiones/$md5 ] 2>/dev/null
+	then
+		while read -r line
+		do
+			echo "$host|$md5|$line"
+		done < $logdir/versiones/$md5
+	fi
 done < $logfile > $logdir/analisis/analisis_de_lineas
 }
 scan_target(){
