@@ -140,61 +140,12 @@ case $1 in
 r) count=0 ;;
 esac
 }
-viewfile(){
-vfile=$1
-header "Visualizando archivo $vfile"
-cat $vfile
-sep
-display c "Líneas: `cat $vfile|wc -l`"
-display c "Use la barra de desplazamiento para desplazar el archivo"
-sep
-cat <<EOF
- [m] Enviar este archivo por mail
- [q] Salir
-EOF
-sep
-read -n1 -ep "Introduzca una opción:" key
-echo
-case $key in
-	m) cat <<EOF | mail -a $vfile -r $wm_user@wal-mart.com -s "Walmart Support Console File" $wm_user@wal-mart.com
-Archivo $vfile ha sido enviado desde Walmart Support Console
-
-Host: $(hostname)
-User: $wm_user
-
-`date +%Y` Walmart Support Console
-EOF
-	case $? in
-		0) echo -e $cG"?"$cD" Envío correcto" ; sleep 1 ;;
-		*) echo -e $cR"?"$cD" Error de envío" ; sleep 1 ;;
-	esac
-	;;
-	*)
-	;;
-esac
-}
 sortfiles(){
 for f in $@
 do
-cp $f $f.bak
-sort $f.bak > $f
-rm $f.bak
+	tempfile=`cat $f`
+	sort <<< "$tempfile" > $f
 done
-}
-job_limiter(){	# Needs numeric input $1 
-sp="/-\|"
-while [ $(jobs -p|wc -l) -ge $1 ]
-do 
-	printf "\b${sp:i++%${#sp}:1}"
-	#sleep 0.01
-done
-}
-breaker(){
-string=$1
-display c "$string" "*" $cY
-display c "Presione cualquier tecla para salir"
-read -n1
-break
 }
 waiter(){
 if [ -z ${1+x} ] 2>/dev/null
@@ -225,7 +176,7 @@ do
 				break
 			fi
 			pstime=`ps --no-headers -o etime $ps | tr -d ' ' | cut -d ':' -f1 | bc`
-			if [ $? -ne 0 ]
+			if [ $? -ne 0 ] || [ -z $pstime ]
 			then
 				unset pid[$ps]
 				break
@@ -239,6 +190,16 @@ do
 		done
 	done
 	sleep 1
+done
+}
+bg(){
+# This function stores background job ids in array "pid"
+id=$!
+pid[$id]=`ps --no-headers -o command $id`
+sp="/-\|"
+while [ $(jobs -p|wc -l) -ge $1 ] && [ ! -z ${1} ] > /dev/null
+do 
+	printf "\b${sp:i++%${#sp}:1}"
 done
 }
 # Testing Functions
@@ -360,9 +321,7 @@ do
 	export host
 	progress ">>> $scr" $count $totals
 	script_runner_bg &
-	id=$!
-	pid[$id]=`ps --no-headers -o command $id`
-	job_limiter $threads
+	bg $threads
 done
 waiter "$maxwait"
 sortfiles $logfile $errlog
@@ -672,9 +631,7 @@ do
 	host=`grep $md5 $logfile | cut -d'|' -f1 | sort -R |head -n 1`
 	echo -e $cG"Descargando $file versión $md5 desde $host:"$cD
 	scan_getfile & 2>/dev/null
-	id=$!
-	pid[$id]=`ps --no-headers -o command $id`
-	job_limiter 60
+	bg 60
 done
 waiter 10
 echo -e $cG"Analizando líneas de archivo $logfile"$cD
@@ -809,9 +766,7 @@ do
 	logfile=$log/TAR-home_${version}_${format}_${model}.log
 	> $logfile
 	tar_home_create & >> $logfile
-	id=$!
-	pid[$id]=`ps --no-headers -o command $id`
-	job_limiter 4
+	bg 4
 done
 waiter 6000 "Creando y transfiriendo ${#selection[@]} TARs de Home"
 display c "Transfiriendo Tars Sucios. Tome asiento y vuelva más tarde"
@@ -819,8 +774,7 @@ for ip in "${created_tars[@]}"
 do
 	logfile=$log/TAR-home_${version}_${format}_${model}.log
 	tar_home_copy_dirty & 2>> $logfile
-	id=$!
-	pid[$id]=`ps --no-headers -o command $id`
+	bg
 done
 waiter 6000 "Creando y transfiriendo ${#created_tars[@]} TARs sucios. Tome asiento"
 }
@@ -981,9 +935,7 @@ do
 	count +
 	progress ">>> Reparando Acceso" $count $totals
 	access_repair_bg >> $logfile &
-	id=$!
-	pid[$id]=`ps --no-headers -o command $id`
-	job_limiter 60
+	bg 60
 done
 waiter 5
 sortfiles $logfile $errlog
