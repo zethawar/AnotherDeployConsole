@@ -158,7 +158,7 @@ total_pids=${#pid[@]}
 while [ ${#pid[@]} -gt 0 ]
 do
 	cls
-	progress "Finalizando ${#pid[@]} tareas. Máximo $time minutos" ${#pid[@]} $total_pids
+	progress "Completando ${#pid[@]} tareas. Máximo $time minutos" ${#pid[@]} $total_pids
 	for ps in ${!pid[@]}
 	do
 		while true
@@ -181,7 +181,7 @@ do
 				unset pid[$ps]
 				break
 			fi
-			echo "--->|ps:$ps|ps_time:$pstime|max_time:$time|<---"
+			echo "--->|Proceso [$ps] $pstime/$time minutos|<---"
 			if [ $pstime -ge $time ]
 			then
 				kill -9 $ps
@@ -500,7 +500,7 @@ do
 	if [[ $key =~ ^[0-9]+$ ]] && [ ! -z ${scan_list[$key]} ]
 	then
 		line=$(( key + 1 ))
-		sed -i "$line"d scan/files.list
+		sed -i "$line"d $tmp/scan_files
 		break
 	else
 		echo "$t_bad"
@@ -664,119 +664,6 @@ for file in ` cat $target`
 do
 	scan_run
 done
-}
-#TARS
-tar_menu(){
-while true
-do
-	header "Creador de Tars"
-	cat <<\EOF
- [1] Crear Tars de home
- 
- [q] Salir
-EOF
-sep
-read -n1 -p "$t_sel" key
-	case $key in
-	1) tar_home_processor ;;
-	q) exit ;;
-	*) echo $t_bad ;;
-	esac
-done
-}
-tar_home_create(){
-echo "Creando tars desde $ip" | tee -a $logfile
-cat $sbin/tar_de_home | sshquery $ip >> $logfile
-if [ $? -ne 0 ]
-then 
-	echo -e $cR"Error al crear el tar ${format}:${model}:${ip}"$cD
-	return 1
-else
-	md5_source=`sshquery $ip "md5sum /tmp/backup-limpio.tar.gz" | grep -v -i 'login\|Time synchronized with\|Time could not be synchronized' | awk '{print $1}'`
-	dest_dir=${dest_dir}/${version}
-	dest_file=${dest_dir}/home/home_${version}_${format}_${model}_pre.tar.gz
-	md5_dest=""
-	while [[ "$md5_source" != "$md5_dest" ]]
-	do
-		sshquery $ip "dd if=/tmp/backup-limpio.tar.gz" | sshquery $dest_host "mkdir -p ${dest_dir} ; dd of=${dest_file}"
-		md5_dest=`echo "md5sum ${dest_file} " | sshquery $dest_host | grep -v -i 'login\|Time synchronized with\|Time could not be synchronized' | awk '{print $1}'`
-		echo "Comparando MD5 de TAR ${format} ${model}|$md5_source|$md5_dest"
-	done
-	echo "MD5 correcto $md5_dest"
-	created_tars+=("$ip")
-	return 0
-fi
-}
-tar_home_copy_dirty(){
-md5_source=`echo "md5sum /tmp/backup-sucio.tar.gz" | sshquery $ip | grep -v -i 'login\|Time synchronized with\|Time could not be synchronized' | awk '{print $1}'`
-dest_dir=${dest_dir}/${version}
-dest_file=${dest_dir}/home_${version}_${format}_${model}.tar.gz
-while true
-do
-	sshquery $ip "cat /tmp/backup-limpio.tar.gz" | sshquery $dest_host "dd of=${dest_file}"
-	md5_dest=`echo "md5sum ${dest_file} " | sshquery $dest_host | grep -v -i 'login\|Time synchronized with\|Time could not be synchronized' | awk '{print $1}'`
-	if [[ "$md5_source" = "$md5_dest" ]]
-	then
-		return 0
-	fi
-done
-}
-tar_home_processor(){
-array_format_name=("Bodega Aurrera Express" "Bodega Aurrera" "Mi Bodega" "SAMS" "Superama" "Supercenter" "Walmart Express")
-array_format=("bae" "ba" "mb" "sa" "sp" "sc" "we")
-array_model=("NCR" "IBM")
-unset selection
-selection=()
-unset created_tars
-created_tars=()
-header "Tars de Home"
-echo $cG
-display c "Introduzca la versión (WX)" "*" $cG
-read version
-sep
-display c "Destino [29.111.67.6]" "*" $cG
-read dest_host
-dest_host=${dest_host:-29.111.67.6}
-sep
-display c "Ruta en el servidor $dest_dir donde se crearan los TARS" "*" $cG
-read dest_dir
-sep
-display c "Introduzca una IP de Caja o deje en blanco si no tiene candidato" "*" $cG
-for i in "${!array_format[@]}"
-do
-	for model in "${array_model[@]}"
-	do
-		echo -ne "$cG ${array_format_name[$i]} $cR $model $cD :"
-		read ip 
-		if [ ! -z ${ip} ]
-		then
-			selection+=("${array_format[$i]}|$model|$ip")
-		fi
-	done
-done
-sep
-count r
-for line in "${selection[@]}"
-do
-	count +
-	progress "Creando TARs de Home" "$count" "${#selection[@]}"
-	format=`echo -n $line | awk -F '|' '{print $1}'`
-	model=`echo -n $line | awk -F '|' '{print $2}'| tr '[:upper:]' '[:lower:]'`
-	ip=`echo -n $line | awk -F '|' '{print $3}'`
-	logfile=$log/TAR-home_${version}_${format}_${model}.log
-	> $logfile
-	tar_home_create & >> $logfile
-	bg 4
-done
-waiter 6000 "Creando y transfiriendo ${#selection[@]} TARs de Home"
-display c "Transfiriendo Tars Sucios. Tome asiento y vuelva más tarde"
-for ip in "${created_tars[@]}"
-do
-	logfile=$log/TAR-home_${version}_${format}_${model}.log
-	tar_home_copy_dirty & 2>> $logfile
-	bg
-done
-waiter 6000 "Creando y transfiriendo ${#created_tars[@]} TARs sucios. Tome asiento"
 }
 # SSH Keys Repair
 p_reader(){
@@ -950,6 +837,8 @@ for i in "${!user_list[@]}" ; do echo " [$i] ${user_list[$i]}" ; done
 # Variables and necessary data
 export TMOUT=0
 export -f sshquery
+export -f sshput
+export -f sshget
 # Format Characters
 cD="\033[0m"	# Character for default color
 fB="\033[1m"	# Character for Bold
